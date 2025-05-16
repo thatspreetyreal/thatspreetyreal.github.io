@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gamble or Die</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #fff;
+    text-align: center;
+    margin: 0; padding: 0;
+  }
+  .container {
+    padding: 20px;
+  }
+  .wheel-container {
+    position: relative;
+    margin: 20px auto;
+    width: 300px; height: 300px;
+  }
+  canvas {
+    width: 100%; height: 100%;
+  }
+  .triangle {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) rotate(180deg);
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 30px solid red;
+  }
+  button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background: #28a745;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+  }
+  button:disabled {
+    background: #555;
+  }
+  #howToPlaySection, #inventorySection, #howManyMonstersSection, #monsterTypeSection {
+    display: none;
+    padding: 20px;
+    border-top: 1px solid #555;
+  }
+  #inventory {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .slot {
+    width: 60px;
+    height: 60px;
+    background: #333;
+    border: 2px solid #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .fade {
+    transition: all 0.5s ease;
+  }
+  #monstersList {
+    margin-top: 20px;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to Gamble or Die</h1>
+    <p>To learn how to play, please read the next section. Otherwise, exit to play.</p>
+    <button onclick="showSection('howToPlaySection')">How to Play</button>
+    <button onclick="showSection('wheelSection')">Play</button>
+    <button onclick="toggleInventory()">Inventory</button>
+
+    <!-- How to Play -->
+    <div id="howToPlaySection" class="fade">
+      <h2>How to Play</h2>
+      <p>Start by selecting your difficulty (slides 11/12). Set your game length (slide 7). Roll the "character" wheel for your stats, then name your character (slide 2). Each turn, roll the "new day" wheel. It has five results: "fight monster", "escape the matrix", "you survive another day", "buff", and "temple". Each result has specific effects. Monster fights involve rolling damage and tracking health. Temple events trigger more intense battles. Use money to buy items by copying them into item slots (slide 9). On the last day, fight the final boss (slide 14) based on difficulty.</p>
+      <button onclick="showSection('menuSection')">Back</button>
+    </div>
+
+    <!-- Inventory -->
+    <div id="inventorySection" class="fade">
+      <h2>Inventory</h2>
+      <div>Money: $<span id="moneyDisplay">0</span></div>
+      <div id="inventory">
+        <div class="slot" id="slot1"></div>
+        <div class="slot" id="slot2"></div>
+        <div class="slot" id="slot3"></div>
+      </div>
+      <button onclick="toggleInventory()">Close Inventory</button>
+    </div>
+
+    <!-- Main Menu placeholder for showSection -->
+    <div id="menuSection" class="fade" style="display:block;">
+      <!-- Empty, just needed to fix showSection calls -->
+    </div>
+
+    <!-- Main Wheel Section -->
+    <div id="wheelSection" class="fade" style="display:none;">
+      <div class="wheel-container">
+        <div class="triangle"></div>
+        <canvas id="wheel" width="300" height="300"></canvas>
+      </div>
+      <button id="spinBtn">Spin</button>
+      <p id="resultText"></p>
+      <button onclick="showSection('menuSection')">Exit</button>
+    </div>
+
+    <!-- How Many Monsters Wheel Section -->
+    <div id="howManyMonstersSection" class="fade" style="display:none;">
+      <h2>How Many Monsters?</h2>
+      <div class="wheel-container">
+        <div class="triangle"></div>
+        <canvas id="howManyWheel" width="300" height="300"></canvas>
+      </div>
+      <button id="howManySpinBtn">Spin</button>
+      <p id="howManyResultText"></p>
+      <button onclick="exitToMainWheel()">Exit</button>
+    </div>
+
+    <!-- Monster Type Wheel Section -->
+    <div id="monsterTypeSection" class="fade" style="display:none;">
+      <h2>Choose Monster Type</h2>
+      <div class="wheel-container">
+        <div class="triangle"></div>
+        <canvas id="monsterTypeWheel" width="300" height="300"></canvas>
+      </div>
+      <button id="monsterTypeSpinBtn">Spin</button>
+      <p id="monsterTypeResultText"></p>
+      <div id="monstersList"></div>
+      <button id="monsterTypeDoneBtn" style="display:none;" onclick="exitToMainWheel()">Done</button>
+    </div>
+  </div>
+
+<script>
+  // Global variables
+  let currentMoney = 0;
+
+  // Section show/hide utility
+  function showSection(id) {
+    const allSections = ['howToPlaySection', 'inventorySection', 'wheelSection', 'howManyMonstersSection', 'monsterTypeSection', 'menuSection'];
+    allSections.forEach(s => {
+      document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
+    });
+    if(id === 'inventorySection') {
+      document.getElementById("moneyDisplay").textContent = currentMoney;
+    }
+  }
+
+  // Toggle inventory visibility
+  function toggleInventory() {
+    const inv = document.getElementById('inventorySection');
+    if(inv.style.display === 'block') {
+      inv.style.display = 'none';
+    } else {
+      inv.style.display = 'block';
+      document.getElementById("moneyDisplay").textContent = currentMoney;
+    }
+  }
+
+  // -----------------------
+  // Main "new day" wheel data
+  const mainOptions = [
+    { label: "fight monster", probability: 47 },
+    { label: "escape the matrix", probability: 3 },
+    { label: "you survive another day", probability: 20 },
+    { label: "buff", probability: 20 },
+    { label: "temple", probability: 10 },
+  ];
+
+  // "How many monsters" wheel data
+  const howManyOptions = [
+    { label: "1 monster", probability: 45, value: 1 },
+    { label: "2 monsters", probability: 30, value: 2 },
+    { label: "3 monsters", probability: 20, value: 3 },
+    { label: "10 monsters", probability: 5, value: 10 },
+  ];
+
+  // "Monster type" wheel data (equal chance)
+  const monsterTypes = [
+    "Pepper Pig",
+    "Gorilla",
+    "Maydof Hatler",
+    "Jonny Cean",
+    "Godzilla",
+  ];
+
+  // Utility to compute arc angles for wheels based on probability
+  function getArcAngles(options) {
+    const total = options.reduce((sum, opt) => sum + (opt.probability ?? 1), 0);
+    return options.map(opt => ((opt.probability ?? 1) / total) * 2 * Math.PI);
+  }
+
+  // Draw wheel function
+  function drawWheel(ctx, canvas, options, startAngle) {
+    const radius = canvas.width / 2;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let angle = startAngle;
+    const arcAngles = getArcAngles(options);
+    for(let i=0; i<options.length; i++) {
+      ctx.beginPath();
+      ctx.moveTo(radius, radius);
+      ctx.arc(radius, radius, radius, angle, angle + arcAngles[i]);
+      ctx.fillStyle = `hsl(${(i/options.length)*360}, 70%, 50%)`;
+      ctx.fill();
+      ctx.fillStyle = "#000";
+      ctx.font = "14px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const textAngle = angle + arcAngles[i]/2;
+      const textX = radius + Math.cos(textAngle) * radius * 0.6;
+      const textY = radius + Math.sin(textAngle) * radius * 0.6;
+      ctx.fillText(options[i].label || options[i], textX, textY);
+      angle += arcAngles[i];
+    }
+  }
+
+  // Spin wheel utility
+  function spinWheel(canvas, options, onComplete) {
+    const ctx = canvas.getContext("2d");
+    const arcAngles = getArcAngles(options);
+    let startAngle = 0;
+    let spinTime = 0;
+    const spinTimeTotal = 1000; // spin for 1 second
+
+    // acceleration + deceleration spin easing function
+    function easeOut(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function animate() {
+      spinTime += 16;
+      const t = Math.min(spinTime / spinTimeTotal, 1);
+      const easedT = easeOut(t);
+      startAngle = easedT * 4 * Math.PI + easedT * 2 * Math.PI; // multiple rotations
+      drawWheel(ctx, canvas, options, startAngle);
+      if(t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        // determine which segment is at the top (2*PI - (startAngle % 2*PI))
+        const normalizedAngle = (2 * Math.PI - (startAngle % (2 * Math.PI))) % (2 * Math.PI);
+        let acc = 0;
+        for(let i=0; i<arcAngles.length; i++) {
+          acc += arcAngles[i];
+          if(normalizedAngle <= acc) {
+            onComplete(i);
+            break;
+          }
+        }
+      }
+    }
+    animate();
+  }
+
+  // Main Wheel Spin Handling
+  const mainWheelCanvas = document.getElementById("wheel");
+  const mainSpinBtn = document.getElementById("spinBtn");
+  const mainResultText = document.getElementById("resultText");
+
+  mainSpinBtn.onclick = () => {
+    mainSpinBtn.disabled = true;
+    mainResultText.textContent = "Spinning...";
+    spinWheel(mainWheelCanvas, mainOptions, (index) => {
+      const choice = mainOptions[index].label;
+      mainResultText.textContent = `You landed on: ${choice}`;
+      mainSpinBtn.disabled = false;
+      if(choice === "fight monster") {
+        showSection("howManyMonstersSection");
+      }
+    });
+  };
+
+  // How Many Monsters Wheel Handling
+  const howManyWheelCanvas = document.getElementById("howManyWheel");
+  const howManySpinBtn = document.getElementById("howManySpinBtn");
+  const howManyResultText = document.getElementById("howManyResultText");
+
+  howManySpinBtn.onclick = () => {
+    howManySpinBtn.disabled = true;
+    howManyResultText.textContent = "Spinning...";
+    spinWheel(howManyWheelCanvas, howManyOptions, (index) => {
+      const chosen = howManyOptions[index];
+      howManyResultText.textContent = `Number of monsters: ${chosen.label}`;
+      howManySpinBtn.disabled = false;
+      startMonsterTypeSequence(chosen.value);
+    });
+  };
+
+  // Exit back to main wheel
+  function exitToMainWheel() {
+    showSection("wheelSection");
+    clearMonsterTypeState();
+  }
+
+  // Monster Type Wheel Handling
+  const monsterTypeWheelCanvas = document.getElementById("monsterTypeWheel");
+  const monsterTypeSpinBtn = document.getElementById("monsterTypeSpinBtn");
+  const monsterTypeResultText = document.getElementById("monsterTypeResultText");
+  const monstersListDiv = document.getElementById("monstersList");
+  const monsterTypeDoneBtn = document.getElementById("monsterTypeDoneBtn");
+
+  let monstersToChoose = 0;
+  let monstersChosen = [];
+
+  function startMonsterTypeSequence(numMonsters) {
+    monstersToChoose = numMonsters;
+    monstersChosen = [];
+    monsterTypeResultText.textContent = `You need to choose ${monstersToChoose} monster(s)`;
+    monstersListDiv.textContent = "";
+    monsterTypeDoneBtn.style.display = "none";
+    showSection("monsterTypeSection");
+  }
+
+  function clearMonsterTypeState() {
+    monstersToChoose = 0;
+    monstersChosen = [];
+    monsterTypeResultText.textContent = "";
+    monstersListDiv.textContent = "";
+    monsterTypeDoneBtn.style.display = "none";
+  }
+
+  monsterTypeSpinBtn.onclick = () => {
+    if(monstersToChoose <= 0) {
+      return;
+    }
+    monsterTypeSpinBtn.disabled = true;
+    monsterTypeResultText.textContent = "Spinning for monster type...";
+    spinWheel(monsterTypeWheelCanvas, monsterTypes, (index) => {
+      const monster = monsterTypes[index];
+      monstersChosen.push(monster);
+      monstersListDiv.textContent = monstersChosen.join(", ");
+      monstersToChoose--;
+      if(monstersToChoose > 0) {
+        monsterTypeResultText.textContent = `Choose next monster (${monstersToChoose} left)`;
+        monsterTypeSpinBtn.disabled = false;
+      } else {
+        monsterTypeResultText.textContent = "All monsters chosen!";
+        monsterTypeSpinBtn.style.display = "none";
+        monsterTypeDoneBtn.style.display = "inline-block";
+      }
+    });
+  };
+
+  // Initialization: draw wheels with start angle 0
+  window.onload = () => {
+    const ctxMain = mainWheelCanvas.getContext("2d");
+    drawWheel(ctxMain, mainWheelCanvas, mainOptions, 0);
+    const ctxHowMany = document.getElementById("howManyWheel").getContext("2d");
+    drawWheel(ctxHowMany, document.getElementById("howManyWheel"), howManyOptions, 0);
+    const ctxMonsterType = monsterTypeWheelCanvas.getContext("2d");
+    drawWheel(ctxMonsterType, monsterTypeWheelCanvas, monsterTypes, 0);
+  };
+
+</script>
+</body>
+</html>
